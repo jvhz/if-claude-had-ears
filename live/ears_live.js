@@ -11,6 +11,7 @@
  *   earsLive.hide()          take the picture away again
  *   earsLive.stop()          stop collecting
  *   earsLive.transcript()    YouTube only: open the transcript panel and keep its text
+ *                            (mutes and pauses the video unless start() is tapping it)
  *   earsLive.text(i)         read that text back, 950 characters at a time (i = 0, 1, 2 ...)
  *
  * It keeps measurements only (how strong each pitch is, 47 times a second).
@@ -257,6 +258,11 @@
   // YouTube only: the site's own transcript, when the video has one.
   async function transcript() {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const hush = () => {                       // if we are not tapping the sound, keep the video quiet
+      const m = document.querySelector('video');
+      if (m && !E) { m.muted = true; m.pause(); }
+    };
+    hush();
     const expand = document.querySelector('#expand');
     if (expand) expand.click();
     await wait(1200);
@@ -265,6 +271,7 @@
     button.scrollIntoView({ block: 'center' });
     button.click();
     await wait(7000);
+    hush();
     const panel = [...document.querySelectorAll('ytd-engagement-panel-section-list-renderer')].filter((p) => p.offsetParent !== null)[0];
     window.__earsText = panel ? panel.innerText.replace(/\n+/g, ' ').replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, '').replace(/\s+/g, ' ').trim() : '';
     return window.__earsText.length + ' characters of transcript kept; read it with earsLive.text(0), text(1) ... up to text(' + Math.floor(window.__earsText.length / 950) + ')';
