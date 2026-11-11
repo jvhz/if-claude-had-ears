@@ -1,6 +1,6 @@
 ---
 name: ears
-description: Read the sound of an audio or video file (music, voiceover, a film's sound track) by turning it into pictures and notes with ears.py. Use when asked what a track or video sounds like, its tempo, key, beat times, structure, or where to cut to the music.
+description: Read sound you cannot hear. Turns an audio or video file into pictures and notes (tempo, key, chords, style, sections, beat times, picture cuts against the beat, loudness) and reads the words of a voiceover or speech in many languages. Can also read a YouTube or other browser tab live, and fetch YouTube transcripts. Use when asked what a track, film or video sounds like, what is said in it, or where to cut to the music.
 ---
 
 # ears: read sound you cannot hear
@@ -13,6 +13,9 @@ You cannot hear audio. This tool turns a sound file into pictures and notes you 
 - "What's the tempo / key / BPM?" / "What chords?" / "What genre or style is this?"
 - "Where are the beats?" / "Where should I cut?" / "Where is the drop?"
 - "Does the music fit this edit?" / "Map the energy of this track"
+- "What do they say?" / "Transcribe the voiceover" / "How fast is the VO, where are its pauses?"
+- "Do my cuts land on the beat?" / "Is this loud enough to deliver?"
+- "Listen to this YouTube link"
 - Any video where the sound track matters, not just the picture
 
 Best with the actual file (mp3, wav, mp4, mov...). If you only have a link and you can drive the user's browser, use the live script instead (see "Only a link" below). It gives less detail.
@@ -21,7 +24,7 @@ Best with the actual file (mp3, wav, mp4, mov...). If you only have a link and y
 
 1. Get the tool if it is not already on the machine:
    ```
-   git clone https://github.com/jvhz/ears.git
+   git clone https://github.com/jvhz/if-claude-had-ears.git ears
    pip install -r ears/requirements.txt
    ```
    ffmpeg must be installed.
@@ -29,8 +32,8 @@ Best with the actual file (mp3, wav, mp4, mov...). If you only have a link and y
    ```
    python ears/ears.py "<file>" --out "<folder>"
    ```
-   Add `--words` if speech matters (needs `pip install sherpa-onnx`; fetches a 100 MB model once). It adds the words with times, plus voice pitch, pace and pauses. Default is English; add `--words-model base` for other languages.
-3. Read `<folder>/report.md` first. It has length, tempo, key, style clues, sections, chord changes, moments and beat times.
+   Add `--words` if speech matters (needs `pip install sherpa-onnx`; fetches a speech model of about 150 MB once). It adds the words with times, plus voice pitch, pace and pauses. It works out the language by itself; if you know it, say so with `--words-language ms` (or `en`, `zh` ...), which is steadier when the voice is over music.
+3. Read `<folder>/report.md` first. It has length, tempo, key, loudness for delivery, style clues, sections, chord changes, moments and beat times. For a video it also lists each picture cut and whether it lands on the beat.
 4. Look at `<folder>/overview.png`. Open a `zoom_*.png` only when you need detail on a specific stretch.
 5. Read `HOW_TO_READ.md` in the repo if you are unsure what a shape in the picture means.
 6. For anything about speech, read `SPEECH.md`: what to expect from the words, and how to talk about a voice.
@@ -51,6 +54,7 @@ When there is no file but you can run JavaScript in the user's browser and take 
 - Never say you listened or heard. You read it.
 - Do not present feelings as facts. Give the measurable character (fast, major key, bright, heavy bass) and let the person judge the mood.
 - Genre: give the shortlist from "Style clues" with the clues behind it. Do not state a single genre as fact; instruments and vocals decide that and the tool cannot name them.
-- Words: quote them as what the speech model read. Names and same-sounding words are often wrong; check names against the title or captions. Do not describe emotion or guess who is speaking.
+- Words: quote them as what the speech model read. Names and same-sounding words are often wrong; check names against the title or captions, and ask for the script if exact wording matters. A voice over music is read less reliably than clean speech. Do not describe emotion or guess who is speaking.
+- Picture cuts: the beat grid is an estimate, so call a miss of under a tenth of a second a "maybe", not a mistake.
 - Tempo and key are estimates. Pass on the confidence the report gives. Mention the double/half tempo when the style suggests it.
 - For editing work, give cut points from the "Moments" list and the beat times.

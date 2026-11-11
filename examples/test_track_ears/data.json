@@ -760,7 +760,15 @@
    0
   ]
  },
+ "picture_cuts": [],
+ "delivery_loudness": {
+  "lufs": -24.5,
+  "range": 12.9,
+  "peak": -1.1
+ },
  "words": null,
+ "voice": null,
+ "pauses": null,
  "pictures": [
   "overview.png",
   "zoom_01_0m00-0m20.png",

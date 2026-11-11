@@ -9,6 +9,7 @@
 - **Overall tone:** dark, warm
 - **Rhythm:** about 4.3 hits per second on average (drum hits, plucks, any sound with a sharp start)
 - **Loudness range:** quietest second -33 dB, loudest second -9 dB (0 = the loudest moment in the track)
+- **Loudness for delivery:** -24.5 LUFS overall, true peak -1.1 dB. For reference, streaming services level music to about -14 LUFS and European broadcast asks for -23.
 
 ## Style clues
 

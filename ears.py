@@ -14,6 +14,7 @@ Usage:
   python ears.py song.mp3
   python ears.py film.mp4 --words          # also write down what is said, and describe the voice
   python ears.py song.wav --out my_folder
+  python ears.py advert.mp4 --words --words-language ms   # tell it the language (here Malay)
 """
 import argparse
 import json
@@ -602,6 +603,31 @@ def word_model_folder(name):
     return folder
 
 
+def picture_cuts(src):
+    """Video files only: the times where the picture cuts to a new shot."""
+    if not shutil.which("ffmpeg"):
+        return []
+    run = subprocess.run(["ffmpeg", "-v", "info", "-i", str(src), "-vf",
+                          "select='gt(scene,0.25)',showinfo", "-an", "-f", "null", "-"],
+                         capture_output=True, text=True)
+    return [round(float(x), 2) for x in re.findall(r"pts_time:([0-9.]+)", run.stderr)]
+
+
+def delivery_loudness(src):
+    """Loudness the way broadcasters and streaming services measure it (LUFS), plus the true peak."""
+    if not shutil.which("ffmpeg"):
+        return None
+    run = subprocess.run(["ffmpeg", "-nostats", "-i", str(src), "-vn", "-af", "ebur128=peak=true",
+                          "-f", "null", "-"], capture_output=True, text=True)
+    tail = run.stderr[run.stderr.rfind("Summary:"):]
+    found = {k: re.search(pattern, tail) for k, pattern in (
+        ("lufs", r"I:\s*(-?[0-9.]+) LUFS"), ("range", r"LRA:\s*([0-9.]+) LU"),
+        ("peak", r"Peak:\s*(-?[0-9.]+) dBFS"))}
+    if not found["lufs"]:
+        return None
+    return {k: float(m.group(1)) for k, m in found.items() if m}
+
+
 def quiet_line(db):
     """The level below which we call it a pause: a little above the recording's own hush."""
     floor = np.percentile(db, 3)
@@ -645,7 +671,7 @@ def speech_chunks(y, sr, longest=24.0, pause=0.3):
     return [(max(0.0, a - 0.4), min(len(y) / sr, b + 0.3)) for a, b in out], runs
 
 
-def transcribe(y, model_name):
+def transcribe(y, model_name, language=""):
     """Speech to text. Uses a small open model (Whisper) that was trained to read the
     same kind of pitch-map picture ears draws, and turn it into words."""
     try:
@@ -659,7 +685,8 @@ def transcribe(y, model_name):
         reader = sherpa_onnx.OfflineRecognizer.from_whisper(
             encoder=str(folder / f"{model_name}-encoder.int8.onnx"),
             decoder=str(folder / f"{model_name}-decoder.int8.onnx"),
-            tokens=str(folder / f"{model_name}-tokens.txt"), num_threads=4)
+            tokens=str(folder / f"{model_name}-tokens.txt"), num_threads=4,
+            language="" if model_name.endswith(".en") else language)
     except Exception as err:
         print(f"  (skipping words: could not load the speech model: {type(err).__name__}: {str(err)[:100]})")
         return None
@@ -673,11 +700,12 @@ def transcribe(y, model_name):
         reader.decode_stream(stream)
         text = stream.result.text.strip()
         if text and not re.fullmatch(r"[\(\[][^\)\]]*[\)\]]\.?", text):     # skip "(music)", "[BLANK_AUDIO]"
-            lines.append({"start": round(a, 2), "end": round(b, 2), "text": text})
+            lines.append({"start": round(a, 2), "end": round(b, 2), "text": text,
+                          "language": getattr(stream.result, "lang", "") or ("en" if model_name.endswith(".en") else "")})
     return {"model": model_name, "lines": lines, "talk": [[round(a, 2), round(b, 2)] for a, b in runs]}
 
 
-def speech_clues(y, words):
+def speech_clues(y, words, has_music=False):
     """What the voice is doing, apart from the words: how high it is, how fast it talks,
     where it pauses, and how each line ends."""
     import librosa
@@ -695,11 +723,30 @@ def speech_clues(y, words):
     bright = (S[freqs >= 3500] ** 2).sum(axis=0) / ((S ** 2).sum(axis=0) + 1e-12)
     kind = np.where(quiet, 0, np.where(voiced, 1, np.where(bright > 0.35, 2, 3)))
     # 0 silence, 1 voiced (vowels, m, n, l...), 2 hiss (s, sh, f, t-bursts), 3 other breath/noise
-    pitch = f0[voiced & ~quiet]
+    if words:
+        # A speech model sometimes "reads" a word into a thud or a breath. Real speech always
+        # has voiced sound in it, so drop any line that has none.
+        def has_voice(w):
+            k = kind[(t >= w["start"]) & (t <= w["end"])]
+            return len(k) > 0 and (k == 1).mean() >= 0.08
+        words["dropped"] = [w for w in words["lines"] if not has_voice(w)]
+        words["lines"] = [w for w in words["lines"] if has_voice(w)]
+    lines = words["lines"] if words else []
+    scope = np.zeros(n, dtype=bool)
+    for w in lines:
+        scope |= (t >= w["start"]) & (t <= w["end"])
+    if words is None:
+        scope[:] = True                       # no speech model: judge the whole file
+    pitch = f0[voiced & ~quiet & scope]
     out = {"times": t, "kind": kind, "f0": np.where(voiced, f0, np.nan)}
     if len(pitch) < 20:
         out["voice"] = None
         return out
+    line_time = sum(w["end"] - w["start"] for w in lines)
+    busy_time = float((~quiet).sum() / (SR / HOP))
+    # Does the voice sit over or between other sound (music, effects)? Then gaps in the
+    # sound are not pauses in the speech, and the pitch reading is less clean.
+    bedded = bool(lines) and (has_music or line_time < 0.6 * busy_time)
     mid, lo, hi = np.median(pitch), np.percentile(pitch, 15), np.percentile(pitch, 85)
     out["voice"] = {
         "pitch_hz": round(float(mid)), "low_hz": round(float(lo)), "high_hz": round(float(hi)),
@@ -708,23 +755,25 @@ def speech_clues(y, words):
                   "high. Typical of a child, or of singing or a raised voice"),
         "movement": ("lively, the pitch moves a lot" if hi / lo > 1.9 else
                      "fairly flat, the pitch moves little" if hi / lo < 1.35 else "moderate"),
-        "share_voiced": round(float((kind == 1).mean()), 2),
-        "share_hiss": round(float((kind == 2).mean()), 2),
-        "share_silence": round(float((kind == 0).mean()), 2),
+        "share_voiced": round(float((kind[scope] == 1).mean()), 2),
+        "share_hiss": round(float((kind[scope] == 2).mean()), 2),
+        "share_silence": round(float((kind[scope] == 0).mean()), 2),
+        "over_other_sound": bedded,
     }
     # Syllables: each one is a little hill in loudness with a vowel at the top.
     from scipy.signal import find_peaks
     body = (freqs >= 300) & (freqs <= 3000)
     hill = smooth(librosa.amplitude_to_db(np.sqrt((S[body] ** 2).mean(axis=0)), ref=np.max, top_db=80), 3)
     tops, _ = find_peaks(np.where(quiet, -80.0, hill), distance=4, prominence=2.0)
-    talk = words["talk"] if words else []
-    spoken = sum(b - a for a, b in talk) or float((~quiet).sum() / (SR / HOP))
+    tops = tops[scope[tops]]
+    talk = words["talk"] if (words and not bedded) else []
+    spoken = line_time if bedded else (sum(b - a for a, b in talk) or busy_time)
     out["voice"]["syllables_per_second"] = round(len(tops) / max(spoken, 1e-6), 1)
     out["voice"]["talking_seconds"] = round(spoken, 1)
     if words:
         count = sum(len(w["text"].split()) for w in words["lines"])
         out["voice"]["words"] = count
-        span = (words["lines"][-1]["end"] - words["lines"][0]["start"]) if words["lines"] else 0
+        span = line_time if bedded else (lines[-1]["end"] - lines[0]["start"]) if lines else 0
         out["voice"]["words_per_minute"] = round(count / max(span, 1e-6) * 60) if span else 0
         gaps = [(round(talk[i][1], 2), round(talk[i + 1][0], 2)) for i in range(len(talk) - 1)]
         out["pauses"] = [g for g in gaps if g[1] - g[0] >= 0.3]
@@ -788,6 +837,10 @@ def draw(a, t0, t1, path, title, wide=16.0, show_beats=True):
             up = mo["what"] == "kicks in"
             ax.annotate("▲" if up else "▼", (mo["time"], -74), ha="center", fontsize=8,
                         color="#1f7a4d" if up else "#3157b8")
+    for c in a.get("cuts", []):
+        if t0 <= c <= t1:
+            ax.axvline(c, color="#3157b8", linewidth=0.7, alpha=0.75)
+            ax.text(c + (t1 - t0) * 0.003, -9.5, "cut", fontsize=6.5, ha="left", va="top", color="#3157b8")
     if show_beats and a["has_beat"] and (t1 - t0) <= 45:
         for i, b in enumerate(a["beat_times"]):
             if t0 <= b <= t1:
@@ -831,7 +884,7 @@ def draw(a, t0, t1, path, title, wide=16.0, show_beats=True):
     ax.set_ylabel("NOTES\n(darker = stronger)")
     ax.set_xlabel("time (minutes:seconds)")
 
-    axes[-1].xaxis.set_major_locator(MaxNLocator(nbins=20, steps=[1, 2, 5, 10]))
+    axes[-1].xaxis.set_major_locator(MaxNLocator(nbins=20, steps=[1, 2, 5, 10], integer=True))
     axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda v, _: mmss_short(v)))
     for axx in axes:
         axx.set_xlim(t0, t1)
@@ -1009,7 +1062,41 @@ def write_report(a, src, out, words, zooms):
           f"- **Rhythm:** about {len(a['hit_times']) / dur:.1f} hits per second on average "
           f"(drum hits, plucks, any sound with a sharp start)",
           f"- **Loudness range:** quietest second {loud_s.min():.0f} dB, "
-          f"loudest second {loud_s.max():.0f} dB (0 = the loudest moment in the track)", ""]
+          f"loudest second {loud_s.max():.0f} dB (0 = the loudest moment in the track)"]
+    lv = a.get("delivery")
+    if lv:
+        peak = (f", true peak {lv['peak']:.1f} dB" + (" (touching the ceiling, check for clipping)"
+                                                    if lv["peak"] > -0.5 else "")) if "peak" in lv else ""
+        L.append(f"- **Loudness for delivery:** {lv['lufs']:.1f} LUFS overall{peak}. For reference, "
+                 f"streaming services level music to about -14 LUFS and European broadcast asks for -23.")
+    L.append("")
+    cuts = a.get("cuts") or []
+    if cuts:
+        L += ["## Picture cuts against the music", "",
+              "Where the picture changes shot, and whether the cut lands on the music. "
+              "Slow fades and dissolves are not picked up.", ""]
+        beats = a["beat_times"]
+        grid = np.sort(np.r_[beats, beats[:-1] + np.diff(beats) / 2]) if a["has_beat"] and len(beats) > 2 else None
+        hits, on_grid = a["hit_times"], 0
+        L += ["| Cut at | Nearest beat or half-beat | Nearest strong hit |", "|---|---|---|"]
+        for c in cuts:
+            row = f"| {mmss(c)} "
+            if grid is not None:
+                g = grid[np.argmin(np.abs(grid - c))]
+                on_grid += abs(c - g) <= 0.05
+                row += f"| {g:.2f}s ({'on it' if abs(c - g) <= 0.05 else f'{abs(c - g):.2f}s ' + ('late' if c > g else 'early')}) "
+            else:
+                row += "| no steady beat "
+            if len(hits):
+                h = hits[np.argmin(np.abs(hits - c))]
+                row += f"| {h:.2f}s ({'on it' if abs(c - h) <= 0.06 else f'{abs(c - h):.2f}s ' + ('late' if c > h else 'early')}) |"
+            else:
+                row += "| none |"
+            L.append(row)
+        if grid is not None:
+            L += ["", f"{on_grid} of {len(cuts)} cuts land within 0.05 seconds of a beat or half-beat. "
+                  "The beat grid is itself an estimate, so treat a miss of under a tenth of a second as a maybe."]
+        L.append("")
 
     clues, fits = style_words(a)
     L += ["## Style clues", "",
@@ -1056,8 +1143,8 @@ def write_report(a, src, out, words, zooms):
     L += ["```", ""]
 
     speech = a.get("speech")
-    talks = bool(speech and speech.get("voice") and speech["voice"]["share_voiced"] >= 0.3
-                 and (not words or speech["voice"].get("words_per_minute", 0) >= 40))
+    talks = bool(speech and speech.get("voice") and
+                 (words["lines"] if words else speech["voice"]["share_voiced"] >= 0.3))
     if speech and not talks:
         L += ["## Voice and speech", "",
               "No clear speech found. If this is music or noise, ignore anything under Words: "
@@ -1068,9 +1155,11 @@ def write_report(a, src, out, words, zooms):
               f"- **Voice pitch:** about {v['pitch_hz']} Hz (mostly between {v['low_hz']} and "
               f"{v['high_hz']}). That is {v['range']}.",
               f"- **Melody of the voice:** {v['movement']}.",
-              f"- **Talking time:** {v['talking_seconds']:.0f} seconds of the {dur:.0f}."]
+              f"- **Talking time:** {v['talking_seconds']:.0f} seconds of the {dur:.0f}."
+              + (" The voice sits over or between other sound (music, effects), so the pitch "
+                 "reading may be coloured by it." if v.get("over_other_sound") else "")]
         if "words_per_minute" in v:
-            pace = ("slow and deliberate" if v["words_per_minute"] < 120 else
+            pace = ("slow and deliberate" if v["words_per_minute"] < 110 else
                     "fast" if v["words_per_minute"] > 180 else "a normal talking pace")
             L.append(f"- **Pace:** {v['words']} words at about {v['words_per_minute']} words a minute, "
                      f"{pace} (roughly {v['syllables_per_second']} syllables a second).")
@@ -1088,7 +1177,10 @@ def write_report(a, src, out, words, zooms):
         L.append("")
     if words:
         L += ["## Words", "",
-              f"Read by a speech model ({words['model']}). Expect small mistakes, above all with names. "
+              f"Read by a speech model ({words['model']}"
+              + (", language heard: " + ", ".join(sorted({w["language"] for w in words["lines"] if w.get("language")}))
+                 if any(w.get("language") for w in words["lines"]) else "")
+              + "). Expect small mistakes, above all with names. "
               "Under each line is its sound shape, one character per tenth of a second: "
               "`v` voiced, `s` hiss, `-` other breath or noise, `.` silence.", ""]
         for w in words["lines"]:
@@ -1097,6 +1189,10 @@ def write_report(a, src, out, words, zooms):
                 L.append(f"  - `{w['shape']}`")
         if not words["lines"]:
             L.append("No words found.")
+        if words.get("dropped"):
+            L += ["", f"Left out: {len(words['dropped'])} short 'line' the model produced where there was no "
+                  "voice at all (" + ", ".join(mmss(w["start"]) for w in words["dropped"]) + "). "
+                  "That is the model guessing at a noise, not something said."]
         L.append("")
 
     changes = chord_timeline(a)
@@ -1142,6 +1238,7 @@ def write_report(a, src, out, words, zooms):
                        "bass_db": [round(x, 1) for x in bass_s],
                        "highs_db": [round(x, 1) for x in high_s],
                        "hits": [int(x) for x in hits_s]},
+        "picture_cuts": cuts, "delivery_loudness": a.get("delivery"),
         "words": words,
         "voice": (a.get("speech") or {}).get("voice"), "pauses": (a.get("speech") or {}).get("pauses"),
         "pictures": ["overview.png"] + [z["file"] for z in zooms],
@@ -1161,9 +1258,12 @@ def main():
                     help="most close-up pictures to make (default 24)")
     ap.add_argument("--words", action="store_true",
                     help="also write down what is said and describe the voice (needs sherpa-onnx)")
-    ap.add_argument("--words-model", default="tiny.en",
-                    help="speech model: tiny.en (English, default), base.en, small.en, "
-                         "or tiny / base / small for other languages")
+    ap.add_argument("--words-model", default="base",
+                    help="speech model: base (any language, default), small (better, slower), "
+                         "or tiny.en / base.en / small.en for English only")
+    ap.add_argument("--words-language", default="",
+                    help="language of the speech as a two-letter code (ms, en, zh, ta ...). "
+                         "Leave out to let the model decide")
     args = ap.parse_args()
 
     src = Path(args.file)
@@ -1178,6 +1278,8 @@ def main():
     y = load_audio(src)
     print("  measuring loudness, pitch, beat and sections...")
     a = analyse(y)
+    a["cuts"] = picture_cuts(src)
+    a["delivery"] = delivery_loudness(src)
     dur = a["duration"]
 
     print("  drawing pictures...")
@@ -1200,10 +1302,10 @@ def main():
             draw(a, t0, t1, out / name, f"{src.name}    close-up {mmss_short(t0)} to {mmss_short(t1)}")
             zooms.append({"file": name, "from": round(t0, 2), "to": round(t1, 2)})
 
-    words = transcribe(y, args.words_model) if args.words else None
+    words = transcribe(y, args.words_model, args.words_language) if args.words else None
     if args.words:
         print("  following the voice (pitch, pace, pauses)...")
-        a["speech"] = speech_clues(y, words)
+        a["speech"] = speech_clues(y, words, has_music=a["has_beat"])
     write_report(a, src, out, words, zooms)
     print(f"Done. Open {out / 'report.md'} and {out / 'overview.png'}")
 

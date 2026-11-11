@@ -1,0 +1,22 @@
+{
+  "name": "ears",
+  "description": "Lets Claude read sound it cannot hear: music, films, voiceovers and YouTube tabs, as pictures, notes and words.",
+  "version": "0.3.0",
+  "author": {
+    "name": "jvhz"
+  },
+  "repository": "https://github.com/jvhz/if-claude-had-ears",
+  "homepage": "https://github.com/jvhz/if-claude-had-ears#readme",
+  "license": "MIT",
+  "skills": "./skills/",
+  "keywords": [
+    "audio",
+    "music",
+    "speech",
+    "transcription",
+    "youtube",
+    "video",
+    "film",
+    "analysis"
+  ]
+}

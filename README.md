@@ -1,10 +1,15 @@
-# ears
+# If Claude had ears
 
-**Lets an AI that cannot hear read sound instead.**
+**Lets an AI that cannot hear read sound instead: music, words, films and YouTube.**
 
 AI assistants like Claude work with text and pictures. They have no ears. But sound can be turned into pictures and numbers, the same way a musician can look at a score in silence and know how the music goes.
 
-`ears` takes any audio or video file and writes a small folder of pictures and notes that describe what is in the sound: how loud it is from second to second, where the beat falls, which notes and chords are playing, where the bass comes in, where the track changes, and what kind of rhythm it has (waltz, swing, backbeat, four-on-the-floor, half-time).
+`ears` is a small tool and a Claude skill that does this. With it, Claude can:
+
+- **Read music.** Tempo, key, chords, where the beat falls, where the track builds and drops, and what kind of rhythm it has (waltz, swing, backbeat, four-on-the-floor, half-time).
+- **Read words.** What is said in a voiceover, interview or film, in many languages, with the times, plus how high the voice is, how fast it talks and where it pauses.
+- **Read a film's sound against its picture.** Every picture cut, and whether it lands on the beat. Loudness measured the way broadcasters and streaming services measure it.
+- **Listen to YouTube.** Read the sound of a YouTube tab (or other web page) while it plays, and fetch YouTube's own transcript, with no file needed.
 
 It is reading, not hearing. It gives an AI the structure, timing and energy of a track. It does not give it the feeling.
 
@@ -36,14 +41,14 @@ It works on video files too. It just reads the sound track:
 python ears.py film.mp4
 ```
 
-To also write down what is said and describe the voice, add `--words`. This needs one extra install, and fetches a speech model (about 100 MB) the first time:
+To also write down what is said and describe the voice, add `--words`. This needs one extra install, and fetches a speech model (about 150 MB) the first time:
 
 ```
 pip install sherpa-onnx
 python ears.py interview.mp4 --words
 ```
 
-The default model reads English. For other languages use `--words-model base` (or `small` for better accuracy, slower).
+It works out the language by itself. If you know the language, say so, which is steadier when the voice is over music: `--words-language ms` for Malay, `en` for English, `zh` for Chinese, and so on. `--words-model small` is more accurate and slower; `tiny.en` is a quick English-only one.
 
 Other options: `--out folder` chooses where the results go, and `--zoom 10` makes each close-up cover 10 seconds instead of 20.
 
@@ -72,6 +77,13 @@ The report has a "Style clues" section that describes how the music is built:
 From those it gives a shortlist of the kinds of music that usually have that rhythm, with the reason for each. It is a shortlist, not a verdict: rhythm narrows the field, but instruments and vocals decide the genre, and ears cannot name those.
 
 [MUSIC.md](MUSIC.md) is the field guide behind this. It explains what separates one genre from another, what about 30 genres look like in a report, and how to reason from clues to a style.
+
+## For films and adverts
+
+Give it a video file and the report also has:
+
+- **Picture cuts against the music:** the time of every cut, the nearest beat or half-beat, and how far off it is. In the pictures, each cut is a small blue mark.
+- **Loudness for delivery:** the overall loudness in LUFS and the true peak, which is what a broadcaster or platform will check.
 
 ## Words and voice
 
@@ -147,7 +159,20 @@ There are no real trap, house, rock or metal recordings in this test set, so tho
 
 Voice pitch was read as about 225 Hz for the reader with a woman's name and 145 and 80 Hz for the two with men's names, which fits. Pauses were found between sentences. On the music test track, it correctly reported "no clear speech found".
 
-A three-minute speech file took about 40 seconds in total. The multi-language model (`base`) was run once on an English clip and did slightly worse there than the English-only default. No other language has been tested.
+The three results above are from the small English-only model (`tiny.en`). A three-minute speech file took about 40 seconds in total.
+
+**Words in another language, over music.** A 30-second advert with a Malay voiceover running over music, read with the default multi-language model:
+
+| What | Result |
+|---|---|
+| Language | Recognised as Malay without being told |
+| The voiceover | Read as fluent Malay sentences that fit the advert. A few words in the middle are clearly garbled. Not yet checked against the script |
+| A false word | The model "read" a one-word line into a sound effect near the start. ears now drops any line that has no voice in it, and says that it did |
+| Steadiness | Reading the same voiceover from a slightly different starting point once returned only "[music]". A voice over music is read less reliably than clean speech |
+
+On the two English audiobook clips the multi-language model did slightly worse than the English-only one.
+
+**Picture cuts and loudness**, on the same advert: ten cuts found, which matched the shot changes visible in a frame-by-frame contact sheet. Seven were within 0.05 seconds of a beat or half-beat. Fades were not tested.
 
 **Live listening in a browser tab** ([live/](live/)): on the test track it read 119.75 bpm (true 120) and A minor (correct), with the right loudness shape. It also collected sound from a YouTube video. Not tested on SoundCloud or Spotify.
 
@@ -164,11 +189,15 @@ A three-minute speech file took about 40 seconds in total. The multi-language mo
 
 ## Using it with Claude
 
-[SKILL.md](SKILL.md) is a short instruction sheet that tells Claude when to run this tool and how to talk about what it finds. Add it as a skill, or just tell Claude: "run ears on this file and tell me what you find".
+The skill is in [skills/ears/](skills/ears/SKILL.md). It is a short instruction sheet that tells Claude when to use this tool and how to talk about what it finds.
+
+- **Claude app:** add the `skills/ears` folder as a skill.
+- **Claude Code:** the repo is laid out as a plugin. `/plugin marketplace add jvhz/if-claude-had-ears` and then `/plugin install ears@if-claude-had-ears` should install it. This install route has not been tested yet.
+- **Or no install at all:** tell Claude "use the tool at github.com/jvhz/if-claude-had-ears on this file and tell me what you find".
 
 ## How it works
 
-One Python file, `ears.py`, built on [librosa](https://librosa.org) (sound analysis) and [matplotlib](https://matplotlib.org) (drawing). The code is commented in plain language.
+One Python file, `ears.py`, plus one browser script, `live/ears_live.js`. `ears.py` is built on [librosa](https://librosa.org) (sound analysis) and [matplotlib](https://matplotlib.org) (drawing). The code is commented in plain language.
 
 ## Licence
 

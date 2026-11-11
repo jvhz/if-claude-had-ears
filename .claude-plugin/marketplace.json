@@ -1,0 +1,14 @@
+{
+  "name": "if-claude-had-ears",
+  "owner": {
+    "name": "jvhz"
+  },
+  "plugins": [
+    {
+      "name": "ears",
+      "description": "Lets Claude read sound it cannot hear: music, films, voiceovers and YouTube tabs, as pictures, notes and words.",
+      "version": "0.3.0",
+      "source": "./"
+    }
+  ]
+}
