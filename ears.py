@@ -12,15 +12,19 @@ Give it any audio or video file. It writes a folder containing:
 
 Usage:
   python ears.py song.mp3
-  python ears.py film.mp4 --words          # also write down what is said
+  python ears.py film.mp4 --words          # also write down what is said, and describe the voice
   python ears.py song.wav --out my_folder
 """
 import argparse
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -579,22 +583,157 @@ def find_moments(loud_1s, times, fps):
 
 # ------------------------------------------------------------------ words
 
-def transcribe(src, model_name):
+WORD_MODELS = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
+               "sherpa-onnx-whisper-{name}.tar.bz2")
+
+
+def word_model_folder(name):
+    """Where the speech model lives. Downloaded once (about 100 MB for tiny.en) and kept."""
+    home = Path(os.environ.get("EARS_MODELS", Path.home() / ".cache" / "ears"))
+    folder = home / f"sherpa-onnx-whisper-{name}"
+    if not folder.exists():
+        home.mkdir(parents=True, exist_ok=True)
+        packed = home / f"{name}.tar.bz2"
+        print(f"  fetching the speech model '{name}' (first time only)...")
+        urllib.request.urlretrieve(WORD_MODELS.format(name=name), packed)
+        with tarfile.open(packed) as tar:
+            tar.extractall(home, filter="data")
+        packed.unlink()
+    return folder
+
+
+def quiet_line(db):
+    """The level below which we call it a pause: a little above the recording's own hush."""
+    floor = np.percentile(db, 3)
+    return float(np.clip(floor + 0.3 * (0 - floor), -45, -18))
+
+
+def speech_chunks(y, sr, longest=24.0, pause=0.3):
+    """Cut speech into pieces at its pauses, so each piece can be read on its own
+    and we know when it was said. Returns (start, end) times in seconds."""
+    step = int(sr * 0.02)
+    count = len(y) // step
+    level = np.sqrt((y[:count * step].reshape(count, step) ** 2).mean(axis=1) + 1e-12)
+    db = 20 * np.log10(level / (level.max() + 1e-12))
+    talking = smooth((db > quiet_line(db)).astype(float), 5) > 0.3
+    runs, start = [], None                       # stretches of talk, split wherever there is a pause
+    quiet = 0
+    for i, on in enumerate(np.r_[talking, [False] * int(pause / 0.02 + 1)]):
+        if on:
+            start = i if start is None else start
+            quiet = 0
+        elif start is not None:
+            quiet += 1
+            if quiet * 0.02 >= pause:
+                runs.append([start * 0.02, (i - quiet + 1) * 0.02])
+                start, quiet = None, 0
+    chunks = []
+    for a, b in runs:
+        if b - a < 0.25:
+            continue
+        if chunks and b - chunks[-1][0] <= 12.0 and a - chunks[-1][1] < 0.7:
+            chunks[-1][1] = b                    # short neighbours read better together
+        else:
+            chunks.append([a, b])
+    out = []
+    for a, b in chunks:                          # nothing longer than the model can take in one go
+        while b - a > longest:
+            out.append((a, a + longest))
+            a += longest
+        out.append((a, b))
+    # Leave a little hush on each side: the model reads the first and last word better with it.
+    return [(max(0.0, a - 0.4), min(len(y) / sr, b + 0.3)) for a, b in out], runs
+
+
+def transcribe(y, model_name):
+    """Speech to text. Uses a small open model (Whisper) that was trained to read the
+    same kind of pitch-map picture ears draws, and turn it into words."""
     try:
-        from faster_whisper import WhisperModel
+        import sherpa_onnx
+        import librosa
     except ImportError:
-        print("  (skipping words: run `pip install faster-whisper` to switch this on)")
+        print("  (skipping words: run `pip install sherpa-onnx` to switch this on)")
         return None
-    print(f"  listening for words (model: {model_name})...")
     try:
-        model = WhisperModel(model_name, device="auto", compute_type="int8")
-        segments, info = model.transcribe(str(src), vad_filter=True)
-        lines = [{"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text.strip()}
-                 for s in segments]
-    except Exception as err:        # usually: the speech model could not be downloaded
-        print(f"  (skipping words: {type(err).__name__}: {str(err)[:120]})")
+        folder = word_model_folder(model_name)
+        reader = sherpa_onnx.OfflineRecognizer.from_whisper(
+            encoder=str(folder / f"{model_name}-encoder.int8.onnx"),
+            decoder=str(folder / f"{model_name}-decoder.int8.onnx"),
+            tokens=str(folder / f"{model_name}-tokens.txt"), num_threads=4)
+    except Exception as err:
+        print(f"  (skipping words: could not load the speech model: {type(err).__name__}: {str(err)[:100]})")
         return None
-    return {"language": info.language, "lines": lines}
+    print(f"  reading the words (model: {model_name})...")
+    y16 = librosa.resample(y, orig_sr=SR, target_sr=16000)
+    chunks, runs = speech_chunks(y16, 16000)
+    lines = []
+    for a, b in chunks:
+        stream = reader.create_stream()
+        stream.accept_waveform(16000, y16[int(a * 16000):int(b * 16000)])
+        reader.decode_stream(stream)
+        text = stream.result.text.strip()
+        if text and not re.fullmatch(r"[\(\[][^\)\]]*[\)\]]\.?", text):     # skip "(music)", "[BLANK_AUDIO]"
+            lines.append({"start": round(a, 2), "end": round(b, 2), "text": text})
+    return {"model": model_name, "lines": lines, "talk": [[round(a, 2), round(b, 2)] for a, b in runs]}
+
+
+def speech_clues(y, words):
+    """What the voice is doing, apart from the words: how high it is, how fast it talks,
+    where it pauses, and how each line ends."""
+    import librosa
+    limit = min(len(y), SR * 600)                           # first ten minutes is plenty
+    f0, voiced, _ = librosa.pyin(y[:limit], fmin=65, fmax=500, sr=SR,
+                                 frame_length=2048, hop_length=HOP)
+    t = librosa.frames_to_time(np.arange(len(f0)), sr=SR, hop_length=HOP)
+    S = np.abs(librosa.stft(y[:limit], n_fft=N_FFT, hop_length=HOP))
+    n = min(len(f0), S.shape[1])
+    f0, voiced, t, S = f0[:n], voiced[:n], t[:n], S[:, :n]
+    freqs = librosa.fft_frequencies(sr=SR, n_fft=N_FFT)
+    level = librosa.amplitude_to_db(np.sqrt((S ** 2).mean(axis=0)), ref=np.max, top_db=80)
+    quiet = smooth((level < quiet_line(level)).astype(float), 3) > 0.5
+    voiced = voiced & (f0 > 68) & (f0 < 480)                # drop readings stuck at the edges of the search
+    bright = (S[freqs >= 3500] ** 2).sum(axis=0) / ((S ** 2).sum(axis=0) + 1e-12)
+    kind = np.where(quiet, 0, np.where(voiced, 1, np.where(bright > 0.35, 2, 3)))
+    # 0 silence, 1 voiced (vowels, m, n, l...), 2 hiss (s, sh, f, t-bursts), 3 other breath/noise
+    pitch = f0[voiced & ~quiet]
+    out = {"times": t, "kind": kind, "f0": np.where(voiced, f0, np.nan)}
+    if len(pitch) < 20:
+        out["voice"] = None
+        return out
+    mid, lo, hi = np.median(pitch), np.percentile(pitch, 15), np.percentile(pitch, 85)
+    out["voice"] = {
+        "pitch_hz": round(float(mid)), "low_hz": round(float(lo)), "high_hz": round(float(hi)),
+        "range": ("low. Roughly 85 to 155 Hz is typical of an adult male voice" if mid < 155 else
+                  "middle to high. Roughly 165 to 255 Hz is typical of an adult female voice" if mid < 260 else
+                  "high. Typical of a child, or of singing or a raised voice"),
+        "movement": ("lively, the pitch moves a lot" if hi / lo > 1.9 else
+                     "fairly flat, the pitch moves little" if hi / lo < 1.35 else "moderate"),
+        "share_voiced": round(float((kind == 1).mean()), 2),
+        "share_hiss": round(float((kind == 2).mean()), 2),
+        "share_silence": round(float((kind == 0).mean()), 2),
+    }
+    # Syllables: each one is a little hill in loudness with a vowel at the top.
+    from scipy.signal import find_peaks
+    body = (freqs >= 300) & (freqs <= 3000)
+    hill = smooth(librosa.amplitude_to_db(np.sqrt((S[body] ** 2).mean(axis=0)), ref=np.max, top_db=80), 3)
+    tops, _ = find_peaks(np.where(quiet, -80.0, hill), distance=4, prominence=2.0)
+    talk = words["talk"] if words else []
+    spoken = sum(b - a for a, b in talk) or float((~quiet).sum() / (SR / HOP))
+    out["voice"]["syllables_per_second"] = round(len(tops) / max(spoken, 1e-6), 1)
+    out["voice"]["talking_seconds"] = round(spoken, 1)
+    if words:
+        count = sum(len(w["text"].split()) for w in words["lines"])
+        out["voice"]["words"] = count
+        span = (words["lines"][-1]["end"] - words["lines"][0]["start"]) if words["lines"] else 0
+        out["voice"]["words_per_minute"] = round(count / max(span, 1e-6) * 60) if span else 0
+        gaps = [(round(talk[i][1], 2), round(talk[i + 1][0], 2)) for i in range(len(talk) - 1)]
+        out["pauses"] = [g for g in gaps if g[1] - g[0] >= 0.3]
+        for w in words["lines"]:                 # the sound shape of each line, ten marks a second
+            k = kind[(t >= w["start"]) & (t <= w["end"])]
+            step = max(1, int(round(0.1 * SR / HOP)))
+            w["shape"] = "".join(".vs-"[int(np.bincount(k[i:i + step], minlength=4).argmax())]
+                                 for i in range(0, len(k), step))
+    return out
 
 
 # --------------------------------------------------------------- pictures
@@ -916,9 +1055,48 @@ def write_report(a, src, out, words, zooms):
         L.append("")
     L += ["```", ""]
 
+    speech = a.get("speech")
+    talks = bool(speech and speech.get("voice") and speech["voice"]["share_voiced"] >= 0.3
+                 and (not words or speech["voice"].get("words_per_minute", 0) >= 40))
+    if speech and not talks:
+        L += ["## Voice and speech", "",
+              "No clear speech found. If this is music or noise, ignore anything under Words: "
+              "a speech model will sometimes 'read' words into sound that has none.", ""]
+    if talks:
+        v = speech["voice"]
+        L += ["## Voice and speech", "",
+              f"- **Voice pitch:** about {v['pitch_hz']} Hz (mostly between {v['low_hz']} and "
+              f"{v['high_hz']}). That is {v['range']}.",
+              f"- **Melody of the voice:** {v['movement']}.",
+              f"- **Talking time:** {v['talking_seconds']:.0f} seconds of the {dur:.0f}."]
+        if "words_per_minute" in v:
+            pace = ("slow and deliberate" if v["words_per_minute"] < 120 else
+                    "fast" if v["words_per_minute"] > 180 else "a normal talking pace")
+            L.append(f"- **Pace:** {v['words']} words at about {v['words_per_minute']} words a minute, "
+                     f"{pace} (roughly {v['syllables_per_second']} syllables a second).")
+        else:
+            L.append(f"- **Pace:** roughly {v['syllables_per_second']} syllables a second.")
+        L.append(f"- **What the sound is made of:** {v['share_voiced'] * 100:.0f}% voiced sound (vowels, "
+                 f"and consonants like m, n, l), {v['share_hiss'] * 100:.0f}% hiss (s, sh, f and the puff "
+                 f"after t or k), {v['share_silence'] * 100:.0f}% silence.")
+        pauses = speech.get("pauses", [])
+        if pauses:
+            longest = max(pauses, key=lambda g: g[1] - g[0])
+            L.append(f"- **Pauses:** {len(pauses)} of 0.3 seconds or more. Longest: "
+                     f"{longest[1] - longest[0]:.1f}s at {mmss(longest[0])}. These are the natural cut points: "
+                     + ", ".join(mmss(g[0]) for g in pauses[:40]) + ".")
+        L.append("")
     if words:
-        L += ["## Words", "", f"Language heard: {words['language']}", ""]
-        L += [f"- **{mmss(w['start'])}** {w['text']}" for w in words["lines"]] or ["No words found."]
+        L += ["## Words", "",
+              f"Read by a speech model ({words['model']}). Expect small mistakes, above all with names. "
+              "Under each line is its sound shape, one character per tenth of a second: "
+              "`v` voiced, `s` hiss, `-` other breath or noise, `.` silence.", ""]
+        for w in words["lines"]:
+            L.append(f"- **{mmss(w['start'])} to {mmss(w['end'])}** {w['text']}")
+            if w.get("shape"):
+                L.append(f"  - `{w['shape']}`")
+        if not words["lines"]:
+            L.append("No words found.")
         L.append("")
 
     changes = chord_timeline(a)
@@ -964,7 +1142,9 @@ def write_report(a, src, out, words, zooms):
                        "bass_db": [round(x, 1) for x in bass_s],
                        "highs_db": [round(x, 1) for x in high_s],
                        "hits": [int(x) for x in hits_s]},
-        "words": words, "pictures": ["overview.png"] + [z["file"] for z in zooms],
+        "words": words,
+        "voice": (a.get("speech") or {}).get("voice"), "pauses": (a.get("speech") or {}).get("pauses"),
+        "pictures": ["overview.png"] + [z["file"] for z in zooms],
     }
     (out / "data.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
 
@@ -980,9 +1160,10 @@ def main():
     ap.add_argument("--max-zooms", type=int, default=24,
                     help="most close-up pictures to make (default 24)")
     ap.add_argument("--words", action="store_true",
-                    help="also write down speech or lyrics (needs faster-whisper)")
-    ap.add_argument("--words-model", default="small",
-                    help="speech model size: tiny, base, small, medium, large-v3")
+                    help="also write down what is said and describe the voice (needs sherpa-onnx)")
+    ap.add_argument("--words-model", default="tiny.en",
+                    help="speech model: tiny.en (English, default), base.en, small.en, "
+                         "or tiny / base / small for other languages")
     args = ap.parse_args()
 
     src = Path(args.file)
@@ -1019,7 +1200,10 @@ def main():
             draw(a, t0, t1, out / name, f"{src.name}    close-up {mmss_short(t0)} to {mmss_short(t1)}")
             zooms.append({"file": name, "from": round(t0, 2), "to": round(t1, 2)})
 
-    words = transcribe(src, args.words_model) if args.words else None
+    words = transcribe(y, args.words_model) if args.words else None
+    if args.words:
+        print("  following the voice (pitch, pace, pauses)...")
+        a["speech"] = speech_clues(y, words)
     write_report(a, src, out, words, zooms)
     print(f"Done. Open {out / 'report.md'} and {out / 'overview.png'}")
 

@@ -11,6 +11,7 @@ Read `report.md` first. It answers most questions without looking at a picture.
 - **Sections** splits the track into stretches that sound alike, with a short description of each.
 - **Moments** lists the times when sound suddenly kicks in or drops out. These are the natural places to cut picture to.
 - **Second-by-second strips** show loudness, bass, highs and hits as one character per second. Taller bar means more. Reading along a strip is the quickest way to see the shape of a track.
+- **Voice and speech** and **Words** appear when the tool was run with `--words`: voice pitch, pace, pauses, and what was said with times. `SPEECH.md` explains how far to trust them.
 - **Chord changes** lists the likely chord at each change, with its time.
 - **Beat times** lists every beat in seconds, for cutting on the beat.
 

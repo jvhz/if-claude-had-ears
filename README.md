@@ -36,12 +36,14 @@ It works on video files too. It just reads the sound track:
 python ears.py film.mp4
 ```
 
-To also write down speech or lyrics with timestamps, add `--words`. This needs one extra install and downloads a speech model the first time:
+To also write down what is said and describe the voice, add `--words`. This needs one extra install, and fetches a speech model (about 100 MB) the first time:
 
 ```
-pip install faster-whisper
+pip install sherpa-onnx
 python ears.py interview.mp4 --words
 ```
+
+The default model reads English. For other languages use `--words-model base` (or `small` for better accuracy, slower).
 
 Other options: `--out folder` chooses where the results go, and `--zoom 10` makes each close-up cover 10 seconds instead of 20.
 
@@ -70,6 +72,19 @@ The report has a "Style clues" section that describes how the music is built:
 From those it gives a shortlist of the kinds of music that usually have that rhythm, with the reason for each. It is a shortlist, not a verdict: rhythm narrows the field, but instruments and vocals decide the genre, and ears cannot name those.
 
 [MUSIC.md](MUSIC.md) is the field guide behind this. It explains what separates one genre from another, what about 30 genres look like in a report, and how to reason from clues to a style.
+
+## Words and voice
+
+With `--words`, the report gains two sections.
+
+- **Words:** what is said, line by line with start and end times, read by an open speech model (Whisper).
+- **Voice and speech:** how high the voice is, how much its pitch moves, the pace in words a minute, and every pause with its time (the natural places to cut a voiceover).
+
+[SPEECH.md](SPEECH.md) is the guide behind this: what speech sounds look like as a picture, why words cannot simply be read off it, and what to expect from the speech model.
+
+## Only have a link, not a file?
+
+[live/](live/) holds a script that reads the sound of a browser tab while it plays, silently, without saving any audio. An AI assistant with a browser tool can use it to read tempo, key and loudness shape from a YouTube or other page, and to fetch YouTube's own transcript. It gives less detail than the file version. See [live/README.md](live/README.md).
 
 ## How accurate is it
 
@@ -122,12 +137,25 @@ Main chords were right on six of the eight, wrong on one (swing), and not read o
 
 There are no real trap, house, rock or metal recordings in this test set, so those shortlists are only proven on the made-up tracks.
 
-**Not tested yet:** the `--words` option. The speech model could not be downloaded on the machine this was built on.
+**Words, on three audiobook clips** (about 15 seconds each, from the same open example set):
+
+| Clip | Result |
+|---|---|
+| Jane Austen, *Northanger Abbey* (checked against the book's text) | 44 of 46 words right. "Catherine" came out as "Chather in" and "Go" as "Girl" |
+| Bulfinch, *The Age of Chivalry* (checked against the book's text) | Most words right. "knights" came out as "nights" (same sound), "Guenever" was misspelled, and "a-maying into" became "a mane to" |
+| A detective story | Reads as a sensible sentence; the Scottish place names are clearly wrong. No text to check against |
+
+Voice pitch was read as about 225 Hz for the reader with a woman's name and 145 and 80 Hz for the two with men's names, which fits. Pauses were found between sentences. On the music test track, it correctly reported "no clear speech found".
+
+A three-minute speech file took about 40 seconds in total. The multi-language model (`base`) was run once on an English clip and did slightly worse there than the English-only default. No other language has been tested.
+
+**Live listening in a browser tab** ([live/](live/)): on the test track it read 119.75 bpm (true 120) and A minor (correct), with the right loudness shape. It also collected sound from a YouTube video. Not tested on SoundCloud or Spotify.
 
 ## What it cannot do
 
 - It cannot tell you if a track is good, or how it feels.
 - It does not name instruments. It can say "bright hits" but not "that is a tambourine".
+- Words come from a speech model and will have mistakes, above all in names and in words that sound alike. It does not judge tone of voice or emotion, and it does not say who is speaking.
 - Tempo can come out as double or half the real speed. Key can be confused with a close relative (C major and A minor use the same notes).
 - Chords are matched to plain major and minor only. Richer chords show as their nearest plain chord.
 - The style shortlist goes by rhythm. It cannot tell rock from pop from country, or see that a piece is jazz unless it swings.

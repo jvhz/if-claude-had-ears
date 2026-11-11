@@ -3,3 +3,6 @@ soundfile
 numpy
 scipy
 matplotlib>=3.6
+
+# Only for --words (speech to text and voice reading):
+# sherpa-onnx
