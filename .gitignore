@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*_ears/
+!examples/test_track_ears/
+examples/*.wav
+.DS_Store
