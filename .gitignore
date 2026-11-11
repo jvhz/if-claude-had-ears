@@ -4,3 +4,4 @@ __pycache__/
 !examples/test_track_ears/
 examples/*.wav
 .DS_Store
+examples/pattern_tracks/

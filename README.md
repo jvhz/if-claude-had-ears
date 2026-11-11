@@ -4,7 +4,7 @@
 
 AI assistants like Claude work with text and pictures. They have no ears. But sound can be turned into pictures and numbers, the same way a musician can look at a score in silence and know how the music goes.
 
-`ears` takes any audio or video file and writes a small folder of pictures and notes that describe what is in the sound: how loud it is from second to second, where the beat falls, which notes are playing, where the bass comes in, and where the track changes.
+`ears` takes any audio or video file and writes a small folder of pictures and notes that describe what is in the sound: how loud it is from second to second, where the beat falls, which notes and chords are playing, where the bass comes in, where the track changes, and what kind of rhythm it has (waltz, swing, backbeat, four-on-the-floor, half-time).
 
 It is reading, not hearing. It gives an AI the structure, timing and energy of a track. It does not give it the feeling.
 
@@ -16,7 +16,7 @@ Run it on `song.mp3` and you get a folder called `song_ears` with:
 
 | File | What it is |
 |---|---|
-| `report.md` | The track in plain words: length, tempo, key, sections, the moments where sound kicks in or drops out, and the time of every beat |
+| `report.md` | The track in plain words: length, tempo, key, style clues, sections, chord changes, the moments where sound kicks in or drops out, and the time of every beat |
 | `overview.png` | The whole track in one picture |
 | `zoom_01...png` | The same picture, close up, 20 seconds at a time |
 | `data.json` | Every number behind the report, for other tools to use |
@@ -56,6 +56,21 @@ Time runs left to right in all four rows.
 
 There is a longer guide in [HOW_TO_READ.md](HOW_TO_READ.md).
 
+## Style clues: reading what kind of music it is
+
+The report has a "Style clues" section that describes how the music is built:
+
+- **Count:** in three (waltz, 6/8) or in four.
+- **Between the beats:** straight, swung (the long-short lilt of jazz and blues), or split in threes.
+- **Low hits:** a kick or bass note on every beat, on half of them, or sparse.
+- **Bright hits:** a snare or clap on every second beat (a backbeat), on every fourth (half-time, as in trap), or no drum kit at all.
+- **Chords:** the likely main chords and how often they change.
+- **Deep bass** and **loud-to-quiet range.**
+
+From those it gives a shortlist of the kinds of music that usually have that rhythm, with the reason for each. It is a shortlist, not a verdict: rhythm narrows the field, but instruments and vocals decide the genre, and ears cannot name those.
+
+[MUSIC.md](MUSIC.md) is the field guide behind this. It explains what separates one genre from another, what about 30 genres look like in a report, and how to reason from clues to a style.
+
 ## How accurate is it
 
 Tested on a small set, so treat these as a first check, not a guarantee.
@@ -78,6 +93,35 @@ Tested on a small set, so treat these as a first check, not a guarantee.
 | Tchaikovsky, Dance of the Sugar Plum Fairy | E minor, which is the key it is written in. Clear beat, about 109 bpm |
 | A spoken audiobook clip | Correctly reported "no steady beat" |
 
+**Style clues, on eight made-up rhythm tracks with known answers** (`examples/make_pattern_tracks.py` builds them):
+
+| Track | What it really is | What ears read |
+|---|---|---|
+| house | 124 bpm, kick on every beat, clap on 2 and 4 | All correct. Shortlist: house, dance-pop or disco |
+| backbeat | 110 bpm, kick and snare taking turns | All correct. Shortlist: pop, rock, funk or country |
+| shuffle | 96 bpm, swung, backbeat | All correct. Shortlist: blues shuffle first |
+| waltz | 150 bpm, in three | All correct. Shortlist: waltz |
+| trap | 140 bpm, snare every fourth beat, deep bass, one chord | All correct. Shortlist: trap or drill |
+| swing | 150 bpm, swung, walking bass | Swing found, but tempo read as 75 (half) and one of three chords wrong. Shortlist has swing jazz second |
+| six8 | 60 bpm, each beat split in three | Read as 90 bpm "in three". The right family, the wrong way of counting it |
+| nodrums | 80 bpm, slow chords only | "No steady beat" (the chords are too far apart to count as a beat). Shortlist: free-tempo music |
+
+Main chords were right on six of the eight, wrong on one (swing), and not read on one (nodrums, because chords are read beat by beat and no beat was found). Major or minor was right on six; the two tracks built on A minor, F, C, G were read as C major, which is the closely related key that uses the same notes.
+
+**Style clues, on real recordings.** I can only check these against what their titles say, since nobody here can listen:
+
+| Recording | Result |
+|---|---|
+| "Sweet Waltz" | Read as "in three". Shortlist: waltz |
+| Tchaikovsky, Sugar Plum Fairy | No drum kit, in four or two, E minor. Shortlist: classical or acoustic |
+| Brahms, Hungarian Dance no. 5 | "No steady beat" (the players push and pull the tempo), no drum kit. Shortlist: free-tempo classical |
+| "Pistachio Ice Cream Ragtime" (piano) | Steady, straight, no drum kit. Shortlist: acoustic or classical piano |
+| Drum and bass-guitar loop | Drum-like hits, backbeat |
+| "Vibe Ace" (a jazz-flavoured piece) | Backbeat at 130. Shortlist said pop, rock, funk or country, which misses the jazz. This is the limit: without swing, rhythm alone cannot see jazz |
+| Spoken audiobook clip | No beat. Shortlist includes "not music at all: speech" |
+
+There are no real trap, house, rock or metal recordings in this test set, so those shortlists are only proven on the made-up tracks.
+
 **Not tested yet:** the `--words` option. The speech model could not be downloaded on the machine this was built on.
 
 ## What it cannot do
@@ -85,6 +129,8 @@ Tested on a small set, so treat these as a first check, not a guarantee.
 - It cannot tell you if a track is good, or how it feels.
 - It does not name instruments. It can say "bright hits" but not "that is a tambourine".
 - Tempo can come out as double or half the real speed. Key can be confused with a close relative (C major and A minor use the same notes).
+- Chords are matched to plain major and minor only. Richer chords show as their nearest plain chord.
+- The style shortlist goes by rhythm. It cannot tell rock from pop from country, or see that a piece is jazz unless it swings.
 - Where there are no drums, beat positions are estimated and can drift.
 - Section letters (A, B, C) are labels in order. They do not mean verse or chorus.
 

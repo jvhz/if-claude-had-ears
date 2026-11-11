@@ -14,6 +14,198 @@
  },
  "tone": "dark, warm",
  "hits_per_second": 4.3,
+ "style": {
+  "deep_bass_share": 0.494,
+  "loudness_swing_db": 17.0,
+  "hit_noisiness": 0.38,
+  "rhythm": {
+   "beats_per_bar": "four",
+   "in3_score": 0.09,
+   "in4_score": 0.79,
+   "between_beats": "straight",
+   "swing_spot": 0.5,
+   "low_hit_on_beats": 1.0,
+   "low_hits_per_beat": 0.68,
+   "bright_hit": "every second beat",
+   "bright2": 0.99,
+   "bright4": 0.5,
+   "off_beat_share": 0.4,
+   "profile": [
+    1.0,
+    0.5,
+    0.05,
+    0.04,
+    0.04,
+    0.04,
+    0.13,
+    0.12,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.36,
+    0.18,
+    0.02,
+    0.01,
+    0.01,
+    0.01,
+    0.13,
+    0.1,
+    0.01,
+    0.02,
+    0.08,
+    0.06
+   ]
+  },
+  "chords": [
+   {
+    "chord": "Am",
+    "share": 0.44
+   },
+   {
+    "chord": "Dm",
+    "share": 0.26
+   },
+   {
+    "chord": "Em",
+    "share": 0.25
+   }
+  ],
+  "chord_changes_per_4_beats": 1.22,
+  "clues": [
+   "Count: in four (or two), like most pop, rock, hip hop and dance music.",
+   "Between the beats: straight. The in-between notes sit exactly halfway.",
+   "Low hits (kick drum or bass note): on every beat.",
+   "Bright hits (snare or clap): on every second beat. This is a backbeat, the spine of pop, rock, funk and hip hop.",
+   "Chords (best match to plain major/minor): Am (44%), Dm (26%), Em (25%); changing about once every four beats.",
+   "Deep bass (below 70 Hz): present (49% of the sound).",
+   "Loud-to-quiet range: wide (17 dB). It breathes, like acoustic, orchestral or film music, or a track with big drops."
+  ],
+  "fits": [
+   {
+    "style": "House, dance-pop or disco",
+    "why": "a low hit on every beat (four-on-the-floor), straight, 120 bpm"
+   }
+  ]
+ },
+ "chord_changes": [
+  {
+   "time": 9.52,
+   "chord": "Am"
+  },
+  {
+   "time": 10.01,
+   "chord": "Dm"
+  },
+  {
+   "time": 12.0,
+   "chord": "Am"
+  },
+  {
+   "time": 14.0,
+   "chord": "Em"
+  },
+  {
+   "time": 16.02,
+   "chord": "Am"
+  },
+  {
+   "time": 17.51,
+   "chord": "D"
+  },
+  {
+   "time": 18.02,
+   "chord": "Dm"
+  },
+  {
+   "time": 20.02,
+   "chord": "Am"
+  },
+  {
+   "time": 22.01,
+   "chord": "Em"
+  },
+  {
+   "time": 24.01,
+   "chord": "Am"
+  },
+  {
+   "time": 25.52,
+   "chord": "D"
+  },
+  {
+   "time": 26.01,
+   "chord": "Dm"
+  },
+  {
+   "time": 28.0,
+   "chord": "Am"
+  },
+  {
+   "time": 30.0,
+   "chord": "Em"
+  },
+  {
+   "time": 32.02,
+   "chord": "Am"
+  },
+  {
+   "time": 33.97,
+   "chord": "Dm"
+  },
+  {
+   "time": 35.92,
+   "chord": "Am"
+  },
+  {
+   "time": 37.96,
+   "chord": "Em"
+  },
+  {
+   "time": 40.01,
+   "chord": "Am"
+  },
+  {
+   "time": 41.52,
+   "chord": "D"
+  },
+  {
+   "time": 42.0,
+   "chord": "Dm"
+  },
+  {
+   "time": 44.0,
+   "chord": "Am"
+  },
+  {
+   "time": 46.02,
+   "chord": "Em"
+  },
+  {
+   "time": 47.51,
+   "chord": "A"
+  },
+  {
+   "time": 48.02,
+   "chord": "Am"
+  },
+  {
+   "time": 49.5,
+   "chord": "D"
+  },
+  {
+   "time": 50.02,
+   "chord": "Dm"
+  },
+  {
+   "time": 52.01,
+   "chord": "Am"
+  },
+  {
+   "time": 54.01,
+   "chord": "Em"
+  }
+ ],
  "sections": [
   {
    "start": 0.0,
@@ -30,7 +222,8 @@
     "C"
    ],
    "name": "A",
-   "feel": "quiet, little bass, no highs, smooth, few hits"
+   "feel": "quiet, little bass, no highs, smooth, few hits",
+   "chords": []
   },
   {
    "start": 7.8,
@@ -47,7 +240,11 @@
     "E"
    ],
    "name": "B",
-   "feel": "quiet, some bass, no highs, busy rhythm"
+   "feel": "quiet, some bass, no highs, busy rhythm",
+   "chords": [
+    "Dm",
+    "Am"
+   ]
   },
   {
    "start": 12.52,
@@ -64,7 +261,11 @@
     "A"
    ],
    "name": "C",
-   "feel": "medium, some bass, some highs, busy rhythm"
+   "feel": "medium, some bass, some highs, busy rhythm",
+   "chords": [
+    "Em",
+    "Am"
+   ]
   },
   {
    "start": 16.02,
@@ -81,7 +282,12 @@
     "D"
    ],
    "name": "D",
-   "feel": "loud, full bass, some highs, busy rhythm"
+   "feel": "loud, full bass, some highs, busy rhythm",
+   "chords": [
+    "Am",
+    "Em",
+    "Dm"
+   ]
   },
   {
    "start": 32.02,
@@ -98,7 +304,12 @@
     "C"
    ],
    "name": "E",
-   "feel": "quiet, little bass, no highs, smooth, few hits"
+   "feel": "quiet, little bass, no highs, smooth, few hits",
+   "chords": [
+    "Am",
+    "Em",
+    "Dm"
+   ]
   },
   {
    "start": 40.01,
@@ -115,7 +326,12 @@
     "D"
    ],
    "name": "F",
-   "feel": "loud, full bass, some highs, busy rhythm"
+   "feel": "loud, full bass, some highs, busy rhythm",
+   "chords": [
+    "Am",
+    "Dm",
+    "Em"
+   ]
   },
   {
    "start": 56.01,
@@ -132,7 +348,8 @@
     "D"
    ],
    "name": "G",
-   "feel": "quiet, some bass, no highs, smooth, few hits"
+   "feel": "quiet, some bass, no highs, smooth, few hits",
+   "chords": []
   },
   {
    "start": 59.98,
@@ -149,7 +366,8 @@
     "C"
    ],
    "name": "H",
-   "feel": "very quiet, little bass, no highs, smooth, few hits"
+   "feel": "very quiet, little bass, no highs, smooth, few hits",
+   "chords": []
   }
  ],
  "moments": [

@@ -14,3 +14,12 @@ To rebuild it yourself:
 python make_test_track.py test_track.wav
 python ../ears.py test_track.wav
 ```
+
+## Rhythm test tracks
+
+`make_pattern_tracks.py` builds eight short tracks, one per rhythm style (house, backbeat, swing, shuffle, waltz, 6/8, trap, no drums), each with known answers written at the top of the file. They are used to check the "Style clues" part of the report:
+
+```
+python make_pattern_tracks.py pattern_tracks
+python ../ears.py pattern_tracks/waltz.wav
+```

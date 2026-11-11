@@ -10,20 +10,38 @@
 - **Rhythm:** about 4.3 hits per second on average (drum hits, plucks, any sound with a sharp start)
 - **Loudness range:** quietest second -33 dB, loudest second -9 dB (0 = the loudest moment in the track)
 
+## Style clues
+
+What the rhythm, chords and sound are built from. These are the things that separate one kind of music from another.
+
+- **Count:** in four (or two), like most pop, rock, hip hop and dance music.
+- **Between the beats:** straight. The in-between notes sit exactly halfway.
+- **Low hits (kick drum or bass note):** on every beat.
+- **Bright hits (snare or clap):** on every second beat. This is a backbeat, the spine of pop, rock, funk and hip hop.
+- **Chords (best match to plain major/minor):** Am (44%), Dm (26%), Em (25%); changing about once every four beats.
+- **Deep bass (below 70 Hz):** present (49% of the sound).
+- **Loud-to-quiet range:** wide (17 dB). It breathes, like acoustic, orchestral or film music, or a track with big drops.
+
+**Kinds of music that usually have this rhythm:**
+
+- House, dance-pop or disco (a low hit on every beat (four-on-the-floor), straight, 120 bpm)
+
+Treat these as a shortlist, not a verdict. Rhythm narrows the field, but the instruments and the voice decide the genre, and this tool cannot name those. `MUSIC.md` explains how to reason from clues to a style.
+
 ## Sections
 
 Stretches that sound alike. Letters are just labels in order, not verse/chorus.
 
-| Section | From | To | Length | Feel | Main notes |
-|---|---|---|---|---|---|
-| A | 0:00.0 | 0:07.8 | 7.8s | quiet, little bass, no highs, smooth, few hits | A E C |
-| B | 0:07.8 | 0:12.5 | 4.7s | quiet, some bass, no highs, busy rhythm | A C E |
-| C | 0:12.5 | 0:16.0 | 3.5s | medium, some bass, some highs, busy rhythm | E G A |
-| D | 0:16.0 | 0:32.0 | 16.0s | loud, full bass, some highs, busy rhythm | A E D |
-| E | 0:32.0 | 0:40.0 | 8.0s | quiet, little bass, no highs, smooth, few hits | A E C |
-| F | 0:40.0 | 0:56.0 | 16.0s | loud, full bass, some highs, busy rhythm | A E D |
-| G | 0:56.0 | 1:00.0 | 4.0s | quiet, some bass, no highs, smooth, few hits | A F D |
-| H | 1:00.0 | 1:04.0 | 4.0s | very quiet, little bass, no highs, smooth, few hits | E A C |
+| Section | From | To | Length | Feel | Main notes | Likely chords |
+|---|---|---|---|---|---|---|
+| A | 0:00.0 | 0:07.8 | 7.8s | quiet, little bass, no highs, smooth, few hits | A E C | - |
+| B | 0:07.8 | 0:12.5 | 4.7s | quiet, some bass, no highs, busy rhythm | A C E | Dm Am |
+| C | 0:12.5 | 0:16.0 | 3.5s | medium, some bass, some highs, busy rhythm | E G A | Em Am |
+| D | 0:16.0 | 0:32.0 | 16.0s | loud, full bass, some highs, busy rhythm | A E D | Am Em Dm |
+| E | 0:32.0 | 0:40.0 | 8.0s | quiet, little bass, no highs, smooth, few hits | A E C | Am Em Dm |
+| F | 0:40.0 | 0:56.0 | 16.0s | loud, full bass, some highs, busy rhythm | A E D | Am Dm Em |
+| G | 0:56.0 | 1:00.0 | 4.0s | quiet, some bass, no highs, smooth, few hits | A F D | - |
+| H | 1:00.0 | 1:04.0 | 4.0s | very quiet, little bass, no highs, smooth, few hits | E A C | - |
 
 ## Moments
 
@@ -54,6 +72,17 @@ One character per second. Taller bar = more of that thing.
 
 ```
 
+## Chord changes
+
+Best match to a plain major or minor chord at each change (m = minor). Richer chords (sevenths, ninths) show up as their nearest plain chord, and drums can blur the reading.
+
+```
+0:09 Am   0:10 Dm   0:12 Am   0:14 Em   0:16 Am   0:17 D   0:18 Dm   0:20 Am
+0:22 Em   0:24 Am   0:25 D   0:26 Dm   0:28 Am   0:30 Em   0:32 Am   0:33 Dm
+0:35 Am   0:37 Em   0:40 Am   0:41 D   0:42 Dm   0:44 Am   0:46 Em   0:47 A
+0:48 Am   0:49 D   0:50 Dm   0:52 Am   0:54 Em
+```
+
 ## Beat times
 
 Seconds from the start. Every beat, in order.
@@ -79,4 +108,4 @@ Seconds from the start. Every beat, in order.
 
 ## What this cannot tell you
 
-These notes describe structure, energy, pitch and timing. They do not say whether the track is good, what instrument a sound really is, or how it feels to a listener. Tempo and key are estimates; treat them as a strong hint, not a fact.
+These notes describe structure, energy, pitch, timing and rhythm style. They do not say whether the track is good, what instrument a sound really is, whether there is singing, or how it feels to a listener. Tempo, key, chords and style are estimates; treat them as a strong hint, not a fact.
