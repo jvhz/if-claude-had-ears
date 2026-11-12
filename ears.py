@@ -787,10 +787,39 @@ def speech_clues(y, words, has_music=False):
 
 # --------------------------------------------------------------- pictures
 
-def draw(a, t0, t1, path, title, wide=16.0, show_beats=True):
+def pyplot():
+    """matplotlib's pyplot, set to draw to files with no screen.
+
+    On a Mac, a job with no desktop session (launchd, cron, ssh, an agent's background
+    runner) can get a font list with nothing in it from `system_profiler`. matplotlib
+    then stops with KeyError: '_items' while it builds its font list, before a single
+    picture is drawn. For that one question only, hand it an empty list instead: it
+    still finds fonts by looking in the font folders, and its own DejaVu Sans is built in.
+    """
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    if sys.platform != "darwin" or "matplotlib.font_manager" in sys.modules:
+        import matplotlib.pyplot as plt
+        return plt
+    import plistlib
+    real = subprocess.check_output
+
+    def check_output(cmd, *args, **kwargs):
+        out = real(cmd, *args, **kwargs)
+        if isinstance(cmd, (list, tuple)) and "SPFontsDataType" in cmd and b"_items" not in out:
+            out = plistlib.dumps([{"_items": []}])
+        return out
+
+    subprocess.check_output = check_output
+    try:
+        import matplotlib.pyplot as plt
+    finally:
+        subprocess.check_output = real
+    return plt
+
+
+def draw(a, t0, t1, path, title, wide=16.0, show_beats=True):
+    plt = pyplot()
     from matplotlib.ticker import FuncFormatter, MaxNLocator
 
     ink, soft, paper = "#1b1b1f", "#8a8a93", "#fbfaf7"
